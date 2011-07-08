@@ -15,7 +15,7 @@ class CssCompressor(Compressor):
     def split_contents(self):
         if self.split_content:
             return self.split_content
-        self.media_nodes = []
+        self.media_nodes = {}
         for elem in self.parser.css_elems():
             data = None
             elem_name = self.parser.elem_name(elem)
@@ -33,14 +33,14 @@ class CssCompressor(Compressor):
             if data:
                 self.split_content.append(data)
                 media = elem_attribs.get('media', None)
-                # Append to the previous node if it had the same media type,
-                # otherwise create a new node.
-                if self.media_nodes and self.media_nodes[-1][0] == media:
-                    self.media_nodes[-1][1].split_content.append(data)
-                else:
+                # filter by media
+                if media in self.media_nodes:
+                    self.media_nodes[media].split_content.append(data)
+                else: 
                     node = CssCompressor(str(elem))
                     node.split_content.append(data)
-                    self.media_nodes.append((media, node))
+                    self.media_nodes[media] = node 
+
         return self.split_content
 
     def output(self, *args, **kwargs):
@@ -50,7 +50,7 @@ class CssCompressor(Compressor):
             self.split_contents()
             if hasattr(self, 'media_nodes'):
                 ret = []
-                for media, subnode in self.media_nodes:
+                for media, subnode in self.media_nodes.items():
                     subnode.extra_context.update({'media': media})
                     ret.append(subnode.output(*args, **kwargs))
                 return ''.join(ret)
