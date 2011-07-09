@@ -57,7 +57,7 @@ class DefaultHtmlParser(ParserBase, HTMLParser):
             ie_init, links, ie_end = str_match.groups()
             links_parser = DefaultHtmlParser(links)
             for link in links_parser.css_elems():
-                self.elem_attribs(link)['ie'] = (ie_init, ie_end)
+                self.elem_attribs(link)['ie'] = ie_init
                 self._css_elems.append(link)
         else:
             pass
