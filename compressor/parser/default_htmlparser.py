@@ -2,6 +2,7 @@ from HTMLParser import HTMLParser
 from django.utils.encoding import smart_unicode
 from compressor.exceptions import ParserError
 from compressor.parser import ParserBase
+import re
 
 class DefaultHtmlParser(ParserBase, HTMLParser):
 
@@ -48,6 +49,18 @@ class DefaultHtmlParser(ParserBase, HTMLParser):
             self._css_elems[-1]['text'] = data
         elif self._current_tag == 'script':
             self._js_elems[-1]['text'] = data
+
+    def handle_comment(self, data):
+        iepattern = re.compile(r'(\[if.*IE.*\]\>)(.*)(<!\[endif\])', re.DOTALL)
+        str_match = iepattern.match(data.strip())
+        if str_match:
+            ie_init, links, ie_end = str_match.groups()
+            links_parser = DefaultHtmlParser(links)
+            for link in links_parser.css_elems():
+                self.elem_attribs(link)['ie'] = ie_init
+                self._css_elems.append(link)
+        else:
+            pass
 
     def css_elems(self):
         return self._css_elems

@@ -1,6 +1,7 @@
 from compressor.conf import settings
 from compressor.base import Compressor, SOURCE_HUNK, SOURCE_FILE
 from compressor.exceptions import UncompressableFileError
+from django.template.loader import render_to_string
 
 
 class CssCompressor(Compressor):
@@ -15,7 +16,7 @@ class CssCompressor(Compressor):
     def split_contents(self):
         if self.split_content:
             return self.split_content
-        self.media_nodes = []
+        self.nodes_to_output = {}
         for elem in self.parser.css_elems():
             data = None
             elem_name = self.parser.elem_name(elem)
@@ -33,14 +34,26 @@ class CssCompressor(Compressor):
             if data:
                 self.split_content.append(data)
                 media = elem_attribs.get('media', None)
-                # Append to the previous node if it had the same media type,
-                # otherwise create a new node.
-                if self.media_nodes and self.media_nodes[-1][0] == media:
-                    self.media_nodes[-1][1].split_content.append(data)
+                ie = elem_attribs.get('ie', None)
+                # filter by media & IE conditionals
+                if ie:
+                    try:
+                        self.nodes_to_output[ie][media].split_content.append(data)
+                    except KeyError as err:
+                        node = CssCompressor(str(elem))
+                        node.split_content.append(data)
+                        if err[0] == ie:
+                            self.nodes_to_output[ie] = {media: node}
+                        elif err[0] == media:
+                            self.nodes_to_output[ie].update({media: node})
                 else:
-                    node = CssCompressor(str(elem))
-                    node.split_content.append(data)
-                    self.media_nodes.append((media, node))
+                    try:
+                        self.nodes_to_output[media].split_content.append(data)
+                    except KeyError: 
+                        node = CssCompressor(str(elem))
+                        node.split_content.append(data)
+                        self.nodes_to_output[media] = node 
+
         return self.split_content
 
     def output(self, *args, **kwargs):
@@ -48,10 +61,22 @@ class CssCompressor(Compressor):
         if (settings.COMPRESS_ENABLED or settings.COMPRESS_PRECOMPILERS or
                 kwargs.get('forced', False)):
             self.split_contents()
-            if hasattr(self, 'media_nodes'):
+            if hasattr(self, 'nodes_to_output'):
                 ret = []
-                for media, subnode in self.media_nodes:
-                    subnode.extra_context.update({'media': media})
-                    ret.append(subnode.output(*args, **kwargs))
+                for block, to_split in self.nodes_to_output.items():
+                    if block.startswith('[if'):
+                        ietag = []
+                        for media, subnode in to_split.items():
+                            subnode.extra_context.update({'media': media})
+                            ietag.append(subnode.output(*args, **kwargs))
+                        #surround with ietags, can't go to render_output
+                        ret.append(render_to_string('compressor/iecss_file.html', {
+                                'ie': block,
+                                'content': ietag
+                            })
+                        )
+                    else:
+                        to_split.extra_context.update({'media': block})
+                        ret.append(to_split.output(*args, **kwargs))
                 return ''.join(ret)
         return super(CssCompressor, self).output(*args, **kwargs)
