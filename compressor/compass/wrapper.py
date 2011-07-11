@@ -23,10 +23,10 @@ class CompassWrapper(object):
             work, err = compiling.communicate()
         except (IOError, OSError), e:
             raise FilterError('Unable to apply %s (%r): %s' %
-                              (self.__class__.__name__, self.command, e))
+                              (self.__class__.__name__, command, e))
         else:
             compiling.wait()
             if compiling.returncode != 0:
-                raise FilterError('Unable to apply %s (%r): %s' %
-                              (self.__class__.__name__, self.command, err))
+                raise FilterError('%s: Compass compile fail => %s' %
+                    (self.__class__.__name__, work))
             print work
